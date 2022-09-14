@@ -1,4 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+import numpy as np
+from maskrcnn_benchmark.structures.keypoint import PersonKeypoints
+import matplotlib.pyplot as plt
 import cv2
 import torch
 from torchvision import transforms as T
@@ -113,7 +116,8 @@ class COCODemo(object):
         self.min_image_size = min_image_size
 
         save_dir = cfg.OUTPUT_DIR
-        checkpointer = DetectronCheckpointer(cfg, self.model, save_dir=save_dir)
+        checkpointer = DetectronCheckpointer(
+            cfg, self.model, save_dir=save_dir)
         _ = checkpointer.load(cfg.MODEL.WEIGHT)
 
         self.transforms = self.build_transform()
@@ -198,7 +202,8 @@ class COCODemo(object):
         image = self.transforms(original_image)
         # convert to an ImageList, padded so that it is divisible by
         # cfg.DATALOADER.SIZE_DIVISIBILITY
-        image_list = to_image_list(image, self.cfg.DATALOADER.SIZE_DIVISIBILITY)
+        image_list = to_image_list(
+            image, self.cfg.DATALOADER.SIZE_DIVISIBILITY)
         image_list = image_list.to(self.device)
         # compute predictions
         with torch.no_grad():
@@ -328,7 +333,8 @@ class COCODemo(object):
         masks = masks[:max_masks]
         # handle case where we have less detections than max_masks
         if len(masks) < max_masks:
-            masks_padded = torch.zeros(max_masks, 1, height, width, dtype=torch.uint8)
+            masks_padded = torch.zeros(
+                max_masks, 1, height, width, dtype=torch.uint8)
             masks_padded[: len(masks)] = masks
             masks = masks_padded
         masks = masks.reshape(masks_per_dim, masks_per_dim, height, width)
@@ -364,14 +370,12 @@ class COCODemo(object):
             x, y = box[:2]
             s = template.format(label, score)
             cv2.putText(
-                image, s, (x, y), cv2.FONT_HERSHEY_SIMPLEX, .5, (255, 255, 255), 1
+                image, s, (x, y), cv2.FONT_HERSHEY_SIMPLEX, .5, (255,
+                                                                 255, 255), 1
             )
 
         return image
 
-import numpy as np
-import matplotlib.pyplot as plt
-from maskrcnn_benchmark.structures.keypoint import PersonKeypoints
 
 def vis_keypoints(img, kps, kp_thresh=2, alpha=0.7):
     """Visualizes keypoints (adapted from vis_one_image).
