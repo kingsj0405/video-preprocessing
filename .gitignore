@@ -1,6 +1,11 @@
 # Project specific
+arxiv/
 vox/
 vox_raw/
+vox_raw
+vox_png/
+vox_mp3/
+vox_mp4/
 youtube-dl
 
 # Byte-compiled / optimized / DLL files
