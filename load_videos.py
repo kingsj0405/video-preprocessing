@@ -1,3 +1,17 @@
+"""
+Overview:
+    load voxceleb2 video and audio
+
+Usage:
+    python load_videos.py
+
+References:
+    - https://librosa.org/doc/0.8.1/generated/librosa.load.html#librosa.load
+    - https://librosa.org/doc/0.8.1/ioformats.html
+    - https://librosa.org/doc/0.8.1/generated/librosa.feature.melspectrogram.html#librosa.feature.melspectrogram
+    - https://librosa.org/doc/0.8.1/generated/librosa.feature.inverse.mel_to_audio.html#librosa.feature.inverse.mel_to_audio
+"""
+import math
 import numpy as np
 import pandas as pd
 import imageio
@@ -14,13 +28,13 @@ from argparse import ArgumentParser
 from skimage import img_as_ubyte
 from skimage.transform import resize
 import torch
-import torchaudio
+import librosa
+import soundfile
 from typing import Tuple
 
 warnings.filterwarnings("ignore")
 
 DEVNULL = open(os.devnull, 'wb')
-DEVNULL = open('debug.log', 'w')
 
 def download(video_id, args):
     video_path = os.path.join(args.video_folder, video_id + ".mp4")
@@ -30,18 +44,21 @@ def download(video_id, args):
                      video_path], stdout=DEVNULL, stderr=DEVNULL)
     return video_path
 
-def get_mel_spectrogram(audio_path: str, fps: float) -> Tuple[torch.tensor, int]:
-    waveform, sample_rate = torchaudio.load(audio_path)
-    hop_length = int(sample_rate / fps)
-    n_fft = hop_length * 2
-    get_specs = torchaudio.transforms.MelSpectrogram(
-        sample_rate=sample_rate,
-        f_max=16000,
+def aud_to_mel(wav, sr, hop_length):
+    wav = wav[:(wav.shape[0] // hop_length) * hop_length]
+    mel = librosa.feature.melspectrogram(
+        wav,
+        sr=sr,
         hop_length=hop_length,
-        n_fft=n_fft
     )
-    mel_spec = get_specs(waveform)
-    return mel_spec, sample_rate
+    recon_wav = librosa.feature.inverse.mel_to_audio(
+        mel,
+        sr=sr,
+        hop_length=hop_length,
+    )
+    if wav.shape[0] != recon_wav.shape[0]:
+        raise ValueError(f'wav and recon_wav are not matched; wav.shape: {wav.shape}, recon_wav.shape: {recon_wav.shape}, audio_path: {audio_path}')
+    return mel, recon_wav
 
 def run(data):
     video_id, args = data
@@ -92,27 +109,33 @@ def run(data):
             str(entry['end']).zfill(6) + '.mp4'
         mp4_path = os.path.join(args.out_folder, partition, path)
         save(mp4_path, entry['frames'], args.format)
-        if args.audio:
-            start = entry["start"] / ref_fps
-            frame_cnt = entry["end"] - entry["start"]
-            duration = frame_cnt / ref_fps
-            # mp3
-            path = first_part + '#' + \
-                str(entry['start']).zfill(6) + '#' + \
-                str(entry['end']).zfill(6) + '.mp3'
-            mp3_path = os.path.join(args.out_folder, partition, path)
-            command = f'ffmpeg -ss {start} -t {duration} -i {raw_path} -q:a 0 -map a {mp3_path}'
-            subprocess.call(command.split(' '), stdout=DEVNULL, stderr=DEVNULL)
-            # melspectogram
-            spec, sr = get_mel_spectrogram(mp3_path, fps)
-            spec = spec[0, :, :frame_cnt]
-            path = first_part + '#' + \
-                str(entry['start']).zfill(6) + '#' + \
-                str(entry['end']).zfill(6) + '.npy'
-            spec_path = os.path.join(args.out_folder, partition, path)
-            torch.save(spec, spec_path)
-            # Remove mp3
-            os.remove(mp3_path)
+        ####################################################################
+        # Audio part
+        ####################################################################
+        start = entry["start"] / ref_fps
+        duration = (len(entry["frames"]) - 1) / ref_fps
+        # mp4
+        path = first_part + '#' + \
+            str(entry['start']).zfill(6) + '#' + \
+            str(entry['end']).zfill(6) + '_vid.mp4'
+        mp4_path = os.path.join(args.out_folder, partition, path)
+        command = f'ffmpeg -ss {start} -t {duration} -i {raw_path} -c:v copy -c:a copy {mp4_path}'
+        subprocess.call(command.split(' '), stdout=DEVNULL, stderr=DEVNULL)
+        # melspectogram
+        hop_length = 512
+        sample_rate = int(ref_fps * hop_length)
+        wav, _ = librosa.load(mp4_path, sr=sample_rate)
+        mel, recon_wav = aud_to_mel(wav, sample_rate, hop_length)
+        path = first_part + '#' + \
+            str(entry['start']).zfill(6) + '#' + \
+            str(entry['end']).zfill(6) + '.npy'
+        mel_path = os.path.join(args.out_folder, partition, path)
+        np.save(mel_path, mel)
+        # Remove mp4 file
+        os.remove(mp4_path)
+        # Raise error if there is problem
+        if len(entry["frames"]) != mel.shape[1]:
+            raise ValueError(f'Frame length and the size of mel are mismatched with data(frame_cnt: {len(entry["frames"])}, mel.shape: {mel.shape}, duration: {duration}, fps: {fps}, ref_fps: {ref_fps}, id: {first_part}#{str(entry["start"]).zfill(6)}')
 
 
 if __name__ == "__main__":
@@ -128,9 +151,6 @@ if __name__ == "__main__":
                         help='Number of workers')
     parser.add_argument("--youtube", default='./youtube-dl',
                         help='Path to youtube-dl')
-    parser.add_argument("--audio", action='store_true',
-                        help='extract audio and get melspectogram')
-
     parser.add_argument("--image_shape", default=(256, 256), type=lambda x: tuple(map(int, x.split(','))),
                         help="Image shape, None for no resize")
 
@@ -144,6 +164,13 @@ if __name__ == "__main__":
             os.makedirs(os.path.join(args.out_folder, partition))
 
     df = pd.read_csv(args.metadata)
+
+    # # Single-processing for debug
+    # video_ids = list(sorted(df['video_id']))
+    # run([video_ids[0], args])
+    # exit()
+
+    # Multi-processing
     video_ids = set(df['video_id'])
     pool = Pool(processes=args.workers)
     args_list = cycle([args])
