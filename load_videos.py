@@ -51,11 +51,13 @@ def aud_to_mel(wav, sr, hop_length):
         sr=sr,
         hop_length=hop_length,
     )
-    recon_wav = librosa.feature.inverse.mel_to_audio(
-        mel,
-        sr=sr,
-        hop_length=hop_length,
-    )
+    # NOTE: The following code can be used for debugging
+    # recon_wav = librosa.feature.inverse.mel_to_audio(
+    #     mel,
+    #     sr=sr,
+    #     hop_length=hop_length,
+    # )
+    recon_wav = wav
     if wav.shape[0] != recon_wav.shape[0]:
         raise ValueError(f'wav and recon_wav are not matched; wav.shape: {wav.shape}, recon_wav.shape: {recon_wav.shape}, audio_path: {audio_path}')
     return mel, recon_wav
