@@ -1,12 +1,7 @@
-from multiprocessing import Pool
-import os
-from tqdm import tqdm
-from itertools import cycle
 import numpy as np
 from skimage import img_as_ubyte
 from skimage.transform import resize
 import imageio
-
 
 def bb_intersection_over_union(boxA, boxB):
     xA = max(boxA[0], boxB[0])
@@ -27,7 +22,6 @@ def one_box_inside_other(boxA, boxB):
     yB = boxA[3] >= boxB[3]
     return xA and yA and xB and yB
 
-
 def join(tube_bbox, bbox):
     xA = min(tube_bbox[0], bbox[0])
     yA = min(tube_bbox[1], bbox[1])
@@ -40,11 +34,9 @@ def compute_aspect_preserved_bbox(bbox, increase_area):
     left, top, right, bot = bbox
     width = right - left
     height = bot - top
-
-    width_increase = max(
-        increase_area, ((1 + 2 * increase_area) * height - width) / (2 * width))
-    height_increase = max(
-        increase_area, ((1 + 2 * increase_area) * width - height) / (2 * height))
+ 
+    width_increase = max(increase_area, ((1 + 2 * increase_area) * height - width) / (2 * width))
+    height_increase = max(increase_area, ((1 + 2 * increase_area) * width - height) / (2 * height))
 
     left = int(left - width_increase * width)
     top = int(top - height_increase * height)
@@ -53,12 +45,11 @@ def compute_aspect_preserved_bbox(bbox, increase_area):
 
     return (left, top, right, bot)
 
-
 def compute_increased_bbox(bbox, increase_area):
     left, top, right, bot = bbox
     width = right - left
     height = bot - top
-
+ 
     left = int(left - increase_area * width)
     top = int(top - increase_area * height)
     right = int(right + increase_area * width)
@@ -79,33 +70,34 @@ def crop_bbox_from_frames(frame_list, tube_bbox, min_frames=16, image_shape=(256
     # Filter if it is too small
     if max(width, height) < min_size:
         return None, None
-
+    
     if aspect_preserving:
-        left, top, right, bot = compute_aspect_preserved_bbox(
-            tube_bbox, increase_area)
+        left, top, right, bot = compute_aspect_preserved_bbox(tube_bbox, increase_area)
     else:
-        left, top, right, bot = compute_increased_bbox(
-            tube_bbox, increase_area)
-
+        left, top, right, bot = compute_increased_bbox(tube_bbox, increase_area)
+ 
     # Compute out of bounds
     left_oob = -min(0, left)
     right_oob = right - min(right, frame_shape[1])
     top_oob = -min(0, top)
     bot_oob = bot - min(bot, frame_shape[0])
-
-    # Not use near the border
-    if max(left_oob / float(width), right_oob / float(width), top_oob / float(height), bot_oob / float(height)) > 0:
+    
+    #Not use near the border
+    if max(left_oob / float(width), right_oob / float(width), top_oob  / float(height), bot_oob / float(height)) > 0:
         return [None, None]
 
     selected = [frame[top:bot, left:right] for frame in frame_list]
     if image_shape is not None:
-        out = [img_as_ubyte(resize(frame, image_shape, anti_aliasing=True))
-               for frame in selected]
+        out = [img_as_ubyte(resize(frame, image_shape, anti_aliasing=True)) for frame in selected]
     else:
         out = selected
-
+ 
     return out, [left, top, right, bot]
 
+from multiprocessing import Pool
+from itertools import cycle
+from tqdm import tqdm
+import os
 
 def scheduler(data_list, fn, args):
     device_ids = args.device_ids.split(",")
@@ -113,26 +105,24 @@ def scheduler(data_list, fn, args):
     args_list = cycle([args])
     f = open(args.chunks_metadata, 'w')
     line = "{video_id},{start},{end},{bbox},{fps},{width},{height},{partition}"
-    print(line.replace('{', '').replace('}', ''), file=f)
+    print (line.replace('{', '').replace('}', ''), file=f)
     for chunks_data in tqdm(pool.imap_unordered(fn, zip(data_list, cycle(device_ids), args_list))):
         for data in chunks_data:
-            print(line.format(**data), file=f)
+            print (line.format(**data), file=f)
             f.flush()
     f.close()
-
 
 def save(path, frames, format):
     if format == '.mp4':
         imageio.mimsave(path, frames)
     elif format == '.png':
         if os.path.exists(path):
-            print("Warning: skiping video %s" % os.path.basename(path))
+            print ("Warning: skiping video %s" % os.path.basename(path))
             return
         else:
             os.makedirs(path)
         for j, frame in enumerate(frames):
-            imageio.imsave(os.path.join(
-                path, str(j).zfill(7) + '.png'), frames[j])
+            imageio.imsave(os.path.join(path, str(j).zfill(7) + '.png'), frames[j]) 
     else:
-        print("Unknown format %s" % format)
+        print ("Unknown format %s" % format)
         exit()

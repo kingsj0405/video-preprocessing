@@ -103,7 +103,7 @@ def split_in_utterance(person_id, video_id, args):
         # "crop=out_w:out_h:x:y" -loglevel error -vcodec libx264 -crf 10  -pix_fmt yuv420p
 
         # print(cut_video)
-        os.system(cut_video)
+        subprocess.call(cut_video.split(' '), stdout=DEVNULL, stderr=DEVNULL)
 
 
 def run(params):

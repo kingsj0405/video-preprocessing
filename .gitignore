@@ -1,8 +1,8 @@
 # Project specific
 DO_NOT_TOUCH_cpu_is_running.py
-vox2_txt/
-vox2_raw/
-vox2/
+vox2_txt
+vox2_raw
+vox2
 arxiv/
 vox/
 vox_raw/
