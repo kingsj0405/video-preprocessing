@@ -26,13 +26,20 @@ warnings.filterwarnings("ignore")
 DEVNULL = open(os.devnull, 'wb')
 REF_FRAME_SIZE = 360
 REF_FPS = 25
+DEBUG_FILE = 'debug_vox2.log'
+
+
+def run_and_print(command):
+    output = subprocess.check_output(command, shell=True)
+    print(f'[DEBUG] command: {command}' + 
+          f'        output: {output}')
 
 
 def download(video_id, args):
     video_path = os.path.join(args.video_folder, video_id + ".mp4")
 
     if not os.path.exists(video_path):
-        down_video = " ".join([
+        command = " ".join([
             "yt-dlp",
             '-f', "'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio'",
             '--skip-unavailable-fragments',
@@ -42,8 +49,7 @@ def download(video_id, args):
             "--external-downloader-args", '"-x 16 -k 1M"',
             '--quiet',
         ])
-        # print(down_video)
-        status = os.system(down_video)
+        run_and_print(command)
 
 
 def secs_to_timestr(secs):
@@ -98,12 +104,12 @@ def split_in_utterance(person_id, video_id, args):
 
         chunk_name = os.path.join(
             args.chunk_folder, f'{person_id}_{video_id}_{i}.mp4')
-        cut_video = f'ffmpeg -i {video_path} -crf 10 -r 25 -vf "crop={int(right-left)}:{int(bot-top)}:{int(left)}:{int(top)}" -ss {secs_to_timestr(start_sec)} -to {secs_to_timestr(end_sec)} {chunk_name} -loglevel error -n'
-
+        command = f'ffmpeg -i {video_path} -crf 10 -r 25 -vf ' + \
+                  f'"crop={int(right-left)}:{int(bot-top)}:{int(left)}:{int(top)}" ' + \
+                  f'-ss {secs_to_timestr(start_sec)} -to {secs_to_timestr(end_sec)} ' + \
+                  f'{chunk_name} -loglevel error -n'
         # "crop=out_w:out_h:x:y" -loglevel error -vcodec libx264 -crf 10  -pix_fmt yuv420p
-
-        # print(cut_video)
-        subprocess.call(cut_video.split(' '), stdout=DEVNULL, stderr=DEVNULL)
+        run_and_print(command)
 
 
 def run(params):
