@@ -27,17 +27,10 @@ DEVNULL = open(os.devnull, 'wb')
 REF_FRAME_SIZE = 360
 REF_FPS = 25
 
-import logging
-from logging.handlers import RotatingFileHandler
-DEBUG_FILE = 'debug_vox2.log'
-FORMAT = "[%(asctime)s %(filename)s->%(funcName)s():%(lineno)s]%(levelname)s: %(message)s"
-HANDLER = RotatingFileHandler(DEBUG_FILE, maxBytes=1000000, backupCount=10) #10 files of 1MB each
-logging.basicConfig(format=FORMAT, level=logging.DEBUG, handlers=[HANDLER])
-
 
 def run_and_print(command):
     output = subprocess.check_output(command, stderr=subprocess.STDOUT, shell=True)
-    logging.debug(f'[DEBUG] command: {command}, output:\n{output}')
+    print(f'[DEBUG] command: {command}, output:\n{output}')
 
 
 def download(video_id, args):
@@ -71,7 +64,7 @@ def split_in_utterance(person_id, video_id, args):
     video_path = os.path.join(args.video_folder, video_id + ".mp4")
 
     if not os.path.exists(video_path):
-        logging.info("No video file %s found, probably broken link" % video_id)
+        print("No video file %s found, probably broken link" % video_id)
         return []
 
     # get video info
@@ -109,6 +102,7 @@ def split_in_utterance(person_id, video_id, args):
 
         chunk_name = os.path.join(
             args.chunk_folder, f'{person_id}_{video_id}_{i}.mp4')
+
         command = f'ffmpeg -i {video_path} -crf 10 -r 25 -vf ' + \
                   f'"crop={int(right-left)}:{int(bot-top)}:{int(left)}:{int(top)}" ' + \
                   f'-ss {secs_to_timestr(start_sec)} -to {secs_to_timestr(end_sec)} ' + \
@@ -130,7 +124,7 @@ def run(params):
             split_in_utterance(person_id, video_id, args)
 
         except Exception as e:
-            logging.error(e)
+            print(f'[ERROR] person_id: {person_id}, video_id: {video_id}, error: {e}')
     return 0
 
 
