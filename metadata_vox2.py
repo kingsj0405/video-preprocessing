@@ -13,10 +13,12 @@ def write_data_to_csv(data, csv_path, header_keys):
 
 @click.command()
 @click.option('--data_root', default='./vox2')
+@click.option('--new_data_root', default='./vox2_44k')
 @click.option('--metadata_train_path', default='./vox2_meta_train.csv')
 @click.option('--metadata_test_path', default='./vox2_meta_test.csv')
 def main(
     data_root: str,
+    new_data_root: str,
     metadata_train_path: str,
     metadata_test_path: str,
 ):
@@ -26,12 +28,17 @@ def main(
     data_train = []
     data_test = []
     for i, video_path in enumerate(video_iter):
-        row = {'video_path': str(video_path)}
         if i < 400:
-            data_test.append(row)
+            new_video_path = Path(new_data_root) / 'test' / video_path.name
+            new_video_path.parent.mkdir(parents=True, exist_ok=True)
+            new_video_path.write_bytes(video_path.read_bytes())
+            data_test.append({'video_path': str(new_video_path)})
             video_cnt['train'] += 1
         elif i < 40400:
-            data_train.append(row)
+            new_video_path = Path(new_data_root) / 'train' / video_path.name
+            new_video_path.parent.mkdir(parents=True, exist_ok=True)
+            new_video_path.write_bytes(video_path.read_bytes())
+            data_train.append({'video_path': str(new_video_path)})
             video_cnt['test'] += 1
         else:
             break
