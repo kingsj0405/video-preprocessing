@@ -38,10 +38,14 @@ DEVNULL = open(os.devnull, 'wb')
 
 def download(video_id, args):
     video_path = os.path.join(args.video_folder, video_id + ".mp4")
-    subprocess.call([args.youtube, '-f', "''best/mp4''", '--write-auto-sub', '--write-sub',
-                     '--sub-lang', 'en', '--skip-unavailable-fragments',
-                     "https://www.youtube.com/watch?v=" + video_id, "--output",
-                     video_path], stdout=DEVNULL, stderr=DEVNULL)
+    command = [
+        args.youtube, '-f', 'best/mp4', '--write-auto-sub', '--write-sub',
+        '--sub-lang', 'en', '--skip-unavailable-fragments',
+        "https://www.youtube.com/watch?v=" + video_id, "--output",
+        video_path,
+    ]
+    print(f"[DEBUG] command: {' '.join(command)}")
+    subprocess.call(command, stdout=DEVNULL, stderr=DEVNULL)
     return video_path
 
 def aud_to_mel(wav, sr, hop_length):
@@ -110,34 +114,40 @@ def run(data):
             str(entry['start']).zfill(6) + '#' + \
             str(entry['end']).zfill(6) + '.mp4'
         mp4_path = os.path.join(args.out_folder, partition, path)
-        save(mp4_path, entry['frames'], args.format)
+        save(mp4_path, entry['frames'], args.format, fps=float(ref_fps))
         ####################################################################
         # Audio part
         ####################################################################
         start = entry["start"] / ref_fps
         duration = (len(entry["frames"]) - 1) / ref_fps
-        # mp4
+        # wav
         path = first_part + '#' + \
             str(entry['start']).zfill(6) + '#' + \
-            str(entry['end']).zfill(6) + '_vid.mp4'
-        mp4_path = os.path.join(args.out_folder, partition, path)
-        command = f'ffmpeg -ss {start} -t {duration} -i {raw_path} -c:v copy -c:a copy {mp4_path}'
+            str(entry['end']).zfill(6) + '.wav'
+        wav_path = os.path.join(args.out_folder, partition, path)
+        command = (
+            f'ffmpeg -ss {start} -t {duration} -i {raw_path} '
+            '-acodec pcm_f32le -ar 48000 '
+            f'{wav_path}')
+        print(f"[DEBUG] command: {command}")
         subprocess.call(command.split(' '), stdout=DEVNULL, stderr=DEVNULL)
-        # melspectogram
-        hop_length = 512
-        sample_rate = int(ref_fps * hop_length)
-        wav, _ = librosa.load(mp4_path, sr=sample_rate)
-        mel, recon_wav = aud_to_mel(wav, sample_rate, hop_length)
-        path = first_part + '#' + \
-            str(entry['start']).zfill(6) + '#' + \
-            str(entry['end']).zfill(6) + '.npy'
-        mel_path = os.path.join(args.out_folder, partition, path)
-        np.save(mel_path, mel)
-        # Remove mp4 file
-        os.remove(mp4_path)
+        # # melspectogram
+        # hop_length = 512
+        # sample_rate = int(ref_fps * hop_length)
+        # wav, _ = librosa.load(mp4_path, sr=sample_rate)
+        # mel, recon_wav = aud_to_mel(wav, sample_rate, hop_length)
+        # path = first_part + '#' + \
+        #     str(entry['start']).zfill(6) + '#' + \
+        #     str(entry['end']).zfill(6) + '.npy'
+        # mel_path = os.path.join(args.out_folder, partition, path)
+        # np.save(mel_path, mel)
+        # # Remove mp4 file
+        # os.remove(mp4_path)
         # Raise error if there is problem
-        if len(entry["frames"]) != mel.shape[1]:
-            raise ValueError(f'Frame length and the size of mel are mismatched with data(frame_cnt: {len(entry["frames"])}, mel.shape: {mel.shape}, duration: {duration}, fps: {fps}, ref_fps: {ref_fps}, id: {first_part}#{str(entry["start"]).zfill(6)}')
+        # if len(entry["frames"]) != mel.shape[1]:
+        #     raise ValueError(f'Frame length and the size of mel are mismatched with data(frame_cnt: {len(entry["frames"])}, mel.shape: {mel.shape}, duration: {duration}, fps: {fps}, ref_fps: {ref_fps}, id: {first_part}#{str(entry["start"]).zfill(6)}')
+    # Remove raw file
+    os.remove(raw_path)
 
 
 if __name__ == "__main__":
@@ -151,7 +161,7 @@ if __name__ == "__main__":
     parser.add_argument("--format", default='.png', help='Storing format')
     parser.add_argument("--workers", default=1, type=int,
                         help='Number of workers')
-    parser.add_argument("--youtube", default='./youtube-dl',
+    parser.add_argument("--youtube", default='yt-dlp',
                         help='Path to youtube-dl')
     parser.add_argument("--image_shape", default=(256, 256), type=lambda x: tuple(map(int, x.split(','))),
                         help="Image shape, None for no resize")

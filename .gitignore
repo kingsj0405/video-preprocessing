@@ -9,6 +9,7 @@ vox_png/
 vox_mp3/
 vox_mp4/
 youtube-dl
+data
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
